@@ -1,6 +1,7 @@
 import math
 import random
 
+
 def buscar_atractores(n=5):
     atractores = []
 
@@ -24,7 +25,7 @@ def buscar_atractores(n=5):
         convergiendo = False
         lyapunov = 0
 
-        for i in range(100000):
+        for i in range(10000):
             xnew = a[0] + a[1]*x + a[2]*x*x + a[3]*y + a[4]*y*y + a[5]*x*y
             ynew = a[6] + a[7]*x + a[8]*x*x + a[9]*y + a[10]*y*y + a[11]*x*y
 

@@ -4,7 +4,6 @@ import datetime
 from points import buscar_atractores
 from time import time
 
-parametros = buscar_atractores(1)[1]
 
 def plot_attractor(screen, attractor):
     min_x, max_x = min(attractor[0]), max(attractor[0])
@@ -33,7 +32,7 @@ def save_attractor(attractor, formula, filename):
         file.write(f"y: {attractor[1][0]}\n")
         file.write(f"a: {attractor[2]}\n")
 
-def display_instructions(screen, show_instructions, show_instructions_after_save):
+def display_instructions(screen, show_instructions, show_instructions_after_save, parametros):
     if show_instructions or show_instructions_after_save:
         font = pygame.font.SysFont(None, 25)
         text = font.render("Press 'N' for the next attractor", True, (255, 255, 255))
@@ -46,13 +45,14 @@ def display_instructions(screen, show_instructions, show_instructions_after_save
         screen.blit(text, (10, screen.get_height() - 60))
         text = font.render("Press 'Q' to toggle instructions", True, (255, 255, 255))
         screen.blit(text, (10, screen.get_height() - 40))
-        
+
         text = font.render(f"Formula: {parametros}", True, (255, 255, 255))
         screen.blit(text, (10, screen.get_height() - 20))
     else:
         font = pygame.font.SysFont(None, 25)
         text = font.render("Press 'Q' to show instructions", True, (255, 255, 255))
         screen.blit(text, (10, screen.get_height() - 40))
+
 
 def main():
     pygame.init()
@@ -69,6 +69,7 @@ def main():
     attractor_index = 0
     show_instructions = True
     show_instructions_after_save = False
+    parametros = buscar_atractores(1)[1]
 
     running = True
     while running:
@@ -77,13 +78,12 @@ def main():
                 running = False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_n:
-                    attractors = buscar_atractores(1)[0]
+                    attractors, parametros = buscar_atractores(1)
                     attractor_index = 0
                 elif event.key == pygame.K_s and attractors:
                     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                     filename = f"Atractor_{timestamp}"
                     save_image(screen, filename)
-
                 elif event.key == pygame.K_t and attractors:
                     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                     filename = f"Atractor_{timestamp}"
@@ -95,11 +95,12 @@ def main():
                 elif event.key == pygame.K_q:
                     show_instructions = not show_instructions
                     show_instructions_after_save = False  
-                    
+
         screen.fill((0, 0, 0))
         if attractors:
             plot_attractor(screen, attractors[attractor_index])
-        display_instructions(screen, show_instructions, show_instructions_after_save)
+
+        display_instructions(screen, show_instructions, show_instructions_after_save, parametros)
         pygame.display.flip()
         clock.tick(60)
 
