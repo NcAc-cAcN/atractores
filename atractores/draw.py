@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-def reconstruct_attractor(parameters, num_points=100000):
+def reconstruct_attractor(parameters, num_points=1000000):
     x, y, a = parameters
     x_list = [x]
     y_list = [y]
@@ -26,7 +26,7 @@ def plot_attractor(x_list, y_list):
     plt.show()
 
 if __name__ == "__main__":
-    example_parameters = (-0.05342833805223057, -0.2781575473630731, [-0.043349822442591446, -0.9455905374580484, 0.6823994501175155, -1.6217569294854495, 1.277158558465271, 0.8330176565804801, 0.03411114195130782, 0.4030699762526133, -0.8222069454059691, -0.7784502357206833, -0.014090997777962855, 0.18514583743319912])
+    example_parameters = (-0.08193648868103298, 0.06340475958705472, [0.09830646140771782, -0.3337185519769599, -1.1301515730183844, 1.407445653218538, -1.552684827791484, 1.378677426082663, 0.12351926338523267, 0.4166790910201552, 0.5123224620137163, -0.6105167076798343, -1.260816324996434, 0.34715417348294153])
 
     reconstructed_x, reconstructed_y = reconstruct_attractor(example_parameters)
     plot_attractor(reconstructed_x, reconstructed_y)
