@@ -5,3 +5,6 @@ To use:
 ```python
 pip install -r requirements.txt
 ```
+```python
+python3 main.py
+```
