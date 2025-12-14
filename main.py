@@ -1,111 +1,278 @@
-import pygame
+import argparse
+import math
 import sys
-import datetime
-from points import buscar_atractores
-from time import time
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from PIL import Image
+
+from points import (
+    buscar_atractores,
+    load_metadata,
+    save_metadata
+)
 
 
-def plot_attractor(screen, attractor):
-    min_x, max_x = min(attractor[0]), max(attractor[0])
-    min_y, max_y = min(attractor[1]), max(attractor[1])
+def scale_points(
+    x_list: List[float],
+    y_list: List[float],
+    width: int,
+    height: int,
+    margin: int = 10
+) -> Tuple[List[int], List[int]]:
+    min_x, max_x = min(x_list), max(x_list)
+    min_y, max_y = min(y_list), max(y_list)
 
-    scaled_attractor = (
-        [(x - min_x) / (max_x - min_x) for x in attractor[0]],
-        [(y - min_y) / (max_y - min_y) for y in attractor[1]]
+    range_x = max_x - min_x if max_x != min_x else 1
+    range_y = max_y - min_y if max_y != min_y else 1
+
+    effective_width = width - 2 * margin
+    effective_height = height - 2 * margin
+
+    scaled_x = [
+        int(margin + (x - min_x) / range_x * effective_width)
+        for x in x_list
+    ]
+    scaled_y = [
+        int(margin + (y - min_y) / range_y * effective_height)
+        for y in y_list
+    ]
+
+    return scaled_x, scaled_y
+
+
+def calculate_density_map(
+    scaled_x: List[int],
+    scaled_y: List[int],
+    width: int,
+    height: int,
+    radius: int = 5
+) -> List[List[float]]:
+    density = [[0.0 for _ in range(width)] for _ in range(height)]
+    
+    for x, y in zip(scaled_x, scaled_y):
+        if 0 <= x < width and 0 <= y < height:
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < width and 0 <= ny < height:
+                        dist = math.sqrt(dx * dx + dy * dy)
+                        if dist <= radius:
+                            weight = 1.0 - (dist / radius)
+                            density[ny][nx] += weight
+    
+    return density
+
+
+def density_to_color(density: float, max_density: float) -> Tuple[int, int, int]:
+    if max_density == 0:
+        return (255, 255, 255)
+    
+    normalized = density / max_density
+    
+    if normalized < 0.25:
+        t = normalized / 0.25
+        r = int(0)
+        g = int(0 + t * 255)
+        b = int(255)
+    elif normalized < 0.5:
+        t = (normalized - 0.25) / 0.25
+        r = int(0)
+        g = int(255)
+        b = int(255 - t * 255)
+    elif normalized < 0.75:
+        t = (normalized - 0.5) / 0.25
+        r = int(0 + t * 255)
+        g = int(255)
+        b = int(0)
+    else:
+        t = (normalized - 0.75) / 0.25
+        r = int(255)
+        g = int(255 - t * 255)
+        b = int(0)
+    
+    return (min(255, max(0, r)), min(255, max(0, g)), min(255, max(0, b)))
+
+
+def generate_image(
+    attractor: Tuple[List[float], List[float]],
+    width: int = 1920,
+    height: int = 1080,
+    color: Optional[Tuple[int, int, int]] = None,
+    background: Tuple[int, int, int] = (0, 0, 0),
+    density_coloring: bool = False,
+    density_radius: int = 5
+) -> Image.Image:
+    x_list, y_list = attractor
+    img = Image.new("RGB", (width, height), background)
+    pixels = img.load()
+
+    scaled_x, scaled_y = scale_points(x_list, y_list, width, height)
+
+    if density_coloring:
+        density_map = calculate_density_map(scaled_x, scaled_y, width, height, density_radius)
+        max_density = max(max(row) for row in density_map) if density_map else 1
+        
+        for x, y in zip(scaled_x, scaled_y):
+            if 0 <= x < width and 0 <= y < height:
+                density = density_map[y][x]
+                pixel_color = density_to_color(density, max_density)
+                pixels[x, y] = pixel_color
+    else:
+        default_color = color if color is not None else (255, 255, 255)
+        for x, y in zip(scaled_x, scaled_y):
+            if 0 <= x < width and 0 <= y < height:
+                pixels[x, y] = default_color
+
+    return img
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Genera y visualiza atractores caóticos",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Ejemplos:
+  %(prog)s --output atractor
+  %(prog)s --seed "mi_semilla" --width 3840 --height 2160
+  %(prog)s --load-metadata outputs/atractor_metadata.json
+        """
     )
 
-    for x, y in zip(scaled_attractor[0], scaled_attractor[1]):
-        screen.set_at((int(x * screen.get_width()), int(y * screen.get_height())), (255, 255, 255))
+    parser.add_argument(
+        "-o", "--output",
+        type=str,
+        default="atractor",
+        help="Nombre base para los archivos de salida (sin extensión)"
+    )
 
-def save_image(screen, filename):
-    pygame.image.save(screen, filename + ".png")
+    parser.add_argument(
+        "-s", "--seed",
+        type=str,
+        default=None,
+        help="Semilla para reproducibilidad"
+    )
 
-def save_attractor(attractor, formula, filename):
-    with open(filename + ".txt", "w") as file:
-        file.write("Formula Coefficients:\n")
-        file.write(" ".join(map(str, formula)) + "\n\n")
-        file.write("Attractor Points:\n")
-        for x, y in zip(attractor[0], attractor[1]):
-            file.write(f"{x} {y}\n")
-        file.write("\nParameters:\n")
-        file.write(f"x: {attractor[0][0]}\n")
-        file.write(f"y: {attractor[1][0]}\n")
-        file.write(f"a: {attractor[2]}\n")
+    parser.add_argument(
+        "-w", "--width",
+        type=int,
+        default=1920,
+        help="Ancho de la imagen en píxeles (default: 1920)"
+    )
 
-def display_instructions(screen, show_instructions, show_instructions_after_save, parametros):
-    if show_instructions or show_instructions_after_save:
-        font = pygame.font.SysFont(None, 25)
-        text = font.render("Press 'N' for the next attractor", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 120))
-        text = font.render("Press 'S' to save the image", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 100))
-        text = font.render("Press 'T' to save values and formula", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 80))
-        text = font.render("Press 'ESC' to exit", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 60))
-        text = font.render("Press 'Q' to toggle instructions", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 40))
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=1080,
+        help="Alto de la imagen en píxeles (default: 1080)"
+    )
 
-        text = font.render(f"Formula: {parametros}", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 20))
-    else:
-        font = pygame.font.SysFont(None, 25)
-        text = font.render("Press 'Q' to show instructions", True, (255, 255, 255))
-        screen.blit(text, (10, screen.get_height() - 40))
+    parser.add_argument(
+        "-i", "--iterations",
+        type=int,
+        default=10000,
+        help="Número máximo de iteraciones (default: 10000)"
+    )
+
+    parser.add_argument(
+        "-l", "--min-lyapunov",
+        type=float,
+        default=10.0,
+        help="Valor mínimo del exponente de Lyapunov (default: 10.0)"
+    )
+
+    parser.add_argument(
+        "--load-metadata",
+        type=str,
+        default=None,
+        help="Cargar semilla desde archivo de metadatos"
+    )
+
+    parser.add_argument(
+        "--no-image",
+        action="store_true",
+        help="No generar imagen, solo metadatos"
+    )
+
+    parser.add_argument(
+        "--density-color",
+        action="store_true",
+        help="Colorear puntos basándose en la densidad local"
+    )
+
+    parser.add_argument(
+        "--density-radius",
+        type=int,
+        default=5,
+        help="Radio para calcular densidad local (default: 5)"
+    )
+
+    return parser.parse_args()
 
 
-def main():
-    pygame.init()
+def main() -> int:
+    args = parse_arguments()
 
-    # Get screen information
-    screen_info = pygame.display.Info()
-    width, height = screen_info.current_w, screen_info.current_h
+    output_dir = Path("outputs")
+    output_dir.mkdir(exist_ok=True)
 
-    screen = pygame.display.set_mode((width, height))
-    pygame.display.set_caption('Chaotic Attractors')
-    clock = pygame.time.Clock()
+    encoded_seed_param = None
+    seed_param = args.seed
 
-    attractors = [] 
-    attractor_index = 0
-    show_instructions = True
-    show_instructions_after_save = False
-    parametros = buscar_atractores(1)[1]
+    if args.load_metadata:
+        try:
+            metadata_path = Path(args.load_metadata)
+            if not metadata_path.is_absolute():
+                metadata_path = output_dir / metadata_path
+            metadata = load_metadata(metadata_path)
+            encoded_seed_param = metadata["seed"]
+        except (FileNotFoundError, KeyError) as e:
+            print(f"Error: No se pudo cargar metadatos: {e}", file=sys.stderr)
+            return 1
 
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_n:
-                    attractors, parametros = buscar_atractores(1)
-                    attractor_index = 0
-                elif event.key == pygame.K_s and attractors:
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                    filename = f"Atractor_{timestamp}"
-                    save_image(screen, filename)
-                elif event.key == pygame.K_t and attractors:
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                    filename = f"Atractor_{timestamp}"
-                    with open(filename + "param" + ".txt", "w") as file:
-                        file.write("Formula Coefficients:\n")
-                        file.write("".join(str(parametros)) + "\n\n")
-                elif event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_q:
-                    show_instructions = not show_instructions
-                    show_instructions_after_save = False  
+    try:
+        attractors, parametros, encoded_seed = buscar_atractores(
+            n=1,
+            seed=seed_param,
+            encoded_seed=encoded_seed_param,
+            max_iterations=args.iterations,
+            min_lyapunov=args.min_lyapunov
+        )
 
-        screen.fill((0, 0, 0))
-        if attractors:
-            plot_attractor(screen, attractors[attractor_index])
+        attractor = attractors[0]
+        num_points = len(attractor[0])
 
-        display_instructions(screen, show_instructions, show_instructions_after_save, parametros)
-        pygame.display.flip()
-        clock.tick(60)
+        base_path = output_dir / args.output
 
-    pygame.quit()
-    sys.exit()
+        if not args.no_image:
+            img = generate_image(
+                attractor,
+                width=args.width,
+                height=args.height,
+                density_coloring=args.density_color,
+                density_radius=args.density_radius
+            )
+            img_path = base_path.with_suffix(".png")
+            img.save(img_path)
+            print(f"Imagen guardada: {img_path}")
+
+        metadata_path = base_path.with_name(f"{base_path.name}_metadata.json")
+        save_metadata(
+            metadata_path,
+            parametros,
+            encoded_seed,
+            num_points
+        )
+        print(f"Metadatos guardados: {metadata_path}")
+
+        print(f"Semilla codificada: {encoded_seed}")
+
+        return 0
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
