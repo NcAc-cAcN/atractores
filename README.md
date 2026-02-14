@@ -47,6 +47,4 @@ python main.py --load-metadata outputs/atractor_metadata.json
 - `outputs/[nombre].png`: Imagen del atractor
 - `outputs/[nombre]_metadata.json`: Metadatos para reproducir el atractor
 
-## Créditos
 
-Código original de: https://www.youtube.com/watch?v=sGdFR9cpE6A&list=LL&index=1
