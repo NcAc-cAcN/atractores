@@ -16,22 +16,6 @@ pip install -r requirements.txt
 python main.py
 ```
 
-### Ejemplos
-
-```sh
-# Con semilla personalizada
-python main.py --seed "mi_semilla"
-
-# Alta resolución
-python main.py --width 3840 --height 2160
-
-# Coloreado por densidad
-python main.py --density-color
-
-# Cargar desde metadatos
-python main.py --load-metadata outputs/atractor_metadata.json
-```
-
 ### Parámetros principales
 
 - `-o, --output`: Nombre base para archivos de salida (default: "atractor")
